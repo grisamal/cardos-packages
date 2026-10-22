@@ -1,0 +1,161 @@
+#!lua
+-- fileman: CardOS File Manager
+-- Keyboard: Up/Down/w/s to select, Enter to open, Backspace to go back, q to quit
+
+local current_dir = "/home/user"
+if not fs.exists(current_dir) then current_dir = "/" end
+
+local selected_idx = 1
+local scroll_offset = 0
+
+local function getEntries(path)
+  local list = fs.list(path) or {}
+  local entries = {}
+  if path ~= "/" then
+    table.insert(entries, { name = "..", is_dir = true, size = 0 })
+  end
+  for _, item in ipairs(list) do
+    local full = (path == "/") and ("/" .. item) or (path .. "/" .. item)
+    local stat = fs.stat(full)
+    local is_d = stat and stat.is_dir or false
+    local sz = stat and stat.size or 0
+    table.insert(entries, { name = item, is_dir = is_d, size = sz, path = full })
+  end
+  table.sort(entries, function(a, b)
+    if a.name == ".." then return true end
+    if b.name == ".." then return false end
+    if a.is_dir and not b.is_dir then return true end
+    if not a.is_dir and b.is_dir then return false end
+    return a.name < b.name
+  end)
+  return entries
+end
+
+local function draw(entries)
+  term.clear()
+  term.print(string.format("CardOS File Manager: %s", current_dir), "cyan")
+  term.print(string.rep("-", 40), "dim")
+
+  local visible_lines = 10
+  if selected_idx < 1 then selected_idx = 1 end
+  if selected_idx > #entries then selected_idx = #entries end
+
+  if selected_idx > scroll_offset + visible_lines then
+    scroll_offset = selected_idx - visible_lines
+  elseif selected_idx <= scroll_offset then
+    scroll_offset = selected_idx - 1
+  end
+  if scroll_offset < 0 then scroll_offset = 0 end
+
+  for i = 1, visible_lines do
+    local idx = scroll_offset + i
+    if idx <= #entries then
+      local e = entries[idx]
+      local prefix = (idx == selected_idx) and " > " or "   "
+      local name = e.name
+      if #name > 24 then name = name:sub(1, 22) .. ".." end
+      local icon = e.is_dir and "[DIR]" or "[FILE]"
+      local line = string.format("%s%-6s %-22s", prefix, icon, name)
+      if not e.is_dir then
+        local sz = e.size
+        if sz >= 1048576 then line = line .. string.format("%4.1fM", sz / 1048576)
+        elseif sz >= 1024 then line = line .. string.format("%4.1fK", sz / 1024)
+        else line = line .. string.format("%5dB", sz) end
+      end
+      local col = (idx == selected_idx) and "white" or (e.is_dir and "green" or "text")
+      term.print(line, col)
+    end
+  end
+
+  term.print(string.rep("-", 40), "dim")
+  term.print("Enter:Open  Backsp:Up  q:Exit", "prompt")
+  term.flush()
+end
+
+local function viewFile(path)
+  term.clear()
+  term.print("Viewing: " .. path, "yellow")
+  term.print(string.rep("-", 40), "dim")
+  local content = fs.read(path) or "<Empty or binary file>"
+  local lines = {}
+  for l in content:gmatch("[^\r\n]+") do
+    table.insert(lines, l)
+    if #lines >= 12 then break end
+  end
+  for _, l in ipairs(lines) do
+    if #l > 40 then l = l:sub(1, 38) .. ".." end
+    term.print(l, "text")
+  end
+  term.print(string.rep("-", 40), "dim")
+  term.print("Press any key to return...", "prompt")
+  term.flush()
+  while true do
+    local k = key.poll()
+    if k then break end
+    sys.sleep(20)
+  end
+end
+
+local entries = getEntries(current_dir)
+draw(entries)
+
+while true do
+  local k = key.poll()
+  local redraw = false
+
+  if k then
+    if k == "down" or k == "s" or k == "." then
+      if selected_idx < #entries then
+        selected_idx = selected_idx + 1
+        redraw = true
+      end
+    elseif k == "up" or k == "w" or k == ";" then
+      if selected_idx > 1 then
+        selected_idx = selected_idx - 1
+        redraw = true
+      end
+    elseif k == "enter" or k == " " then
+      local sel = entries[selected_idx]
+      if sel then
+        if sel.name == ".." then
+          local parent = current_dir:match("^(.*)/[^/]+$")
+          if not parent or parent == "" then parent = "/" end
+          current_dir = parent
+          entries = getEntries(current_dir)
+          selected_idx = 1
+          scroll_offset = 0
+          redraw = true
+        elseif sel.is_dir then
+          current_dir = sel.path
+          entries = getEntries(current_dir)
+          selected_idx = 1
+          scroll_offset = 0
+          redraw = true
+        else
+          viewFile(sel.path)
+          redraw = true
+        end
+      end
+    elseif k == "backspace" then
+      if current_dir ~= "/" then
+        local parent = current_dir:match("^(.*)/[^/]+$")
+        if not parent or parent == "" then parent = "/" end
+        current_dir = parent
+        entries = getEntries(current_dir)
+        selected_idx = 1
+        scroll_offset = 0
+        redraw = true
+      end
+    elseif k == "q" or k == "ctrl-q" or k == "esc" then
+      break
+    end
+  end
+
+  if redraw then
+    draw(entries)
+  else
+    sys.sleep(30)
+  end
+end
+
+term.clear()

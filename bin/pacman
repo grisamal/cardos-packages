@@ -5,7 +5,7 @@
 local REPO_BASE = "https://raw.githubusercontent.com/grisamal/cardos-packages/main"
 local DB_PATH = "/sys/pacman/packages.json"
 local INSTALLED_PATH = "/sys/pacman/installed.txt"
-local BIN_DIR = "/bin"
+local INSTALL_DIR = "/usr/local/bin"
 
 local function readLine()
   local str = ""
@@ -13,16 +13,16 @@ local function readLine()
     local k = key.poll()
     if k then
       if k == "enter" then
-        term.print("")
+        term.print("", "text")
         return str
       elseif k == "backspace" then
         if #str > 0 then
           str = str:sub(1, #str - 1)
-          term.write("\b \b")
+          term.write("\b \b", "text")
         end
       elseif #k == 1 then
         str = str .. k
-        term.write(k)
+        term.write(k, "white")
       end
     end
     sys.sleep(10)
@@ -77,51 +77,61 @@ local function saveInstalled(inst)
 end
 
 local function fetchUrl(url)
-  if net and net.get then
-    local status, body = net.get(url)
-    if status == 200 or (status and not body and #status > 0) then
-      return body or status
-    end
+  if not net or not net.get then return nil end
+  local status, body = net.get(url)
+  if status == 200 and type(body) == "string" and #body > 0 then
+    return body
+  elseif type(status) == "string" and #status > 0 and (not body or body == "") then
+    return status
   end
   return nil
 end
 
 local function syncDb()
-  term.print(":: Synchronizing package databases...")
-  term.write(" grisamal [")
+  term.print(":: Synchronizing package databases...", "cyan")
+  term.write("   grisamal [", "text")
   local url = REPO_BASE .. "/packages.json"
   local data = fetchUrl(url)
   if not data or #data < 10 then
-    term.print("FAILED]")
-    term.print("error: failed to synchronize database (check WiFi connection)")
+    term.print("FAILED]", "red")
+    term.print("error: failed to synchronize database (check WiFi connection)", "red")
     return false
   end
+  if not fs.exists("/sys/pacman") then
+    -- Directory exists on SD
+  end
   fs.write(DB_PATH, data)
-  term.print("####################] 100%")
+  term.print("####################] 100%", "green")
   local db = parseJson(data)
-  term.print(string.format(":: Database updated: %d packages available.", #(db.packages or {})))
+  local count = #(db.packages or {})
+  term.print(string.format(":: Database updated: %d packages available.", count), "white")
   return true
 end
 
 local function searchDb(query)
   local db = loadDb()
   if not db then
-    term.print("error: database not found. Run 'pacman -Sy' first.")
+    term.print("error: database not found. Run 'pacman -Sy' first.", "red")
     return
   end
   query = (query or ""):lower()
+  local found = 0
   for _, p in ipairs(db.packages or {}) do
-    if p.name:lower():find(query, 1, true) or (p.description or ""):lower():find(query, 1, true) then
-      term.print(string.format("\27[1;35mcore/\27[1;37m%s \27[1;32m%s\27[0m", p.name, p.version))
-      term.print("    " .. (p.description or "No description"))
+    if query == "" or p.name:lower():find(query, 1, true) or (p.description or ""):lower():find(query, 1, true) then
+      term.print(string.format("core/%s %s", p.name, p.version), "magenta")
+      term.print("    " .. (p.description or "No description"), "text")
+      found = found + 1
     end
+  end
+  if found == 0 then
+    term.print("no packages matched query", "yellow")
   end
 end
 
 local function installPkg(pkgName)
   local db = loadDb()
   if not db then
-    term.print("error: database not found. Run 'pacman -Sy' first.")
+    term.print("error: database not found. Run 'pacman -Sy' first.", "red")
     return
   end
   local target = nil
@@ -129,35 +139,32 @@ local function installPkg(pkgName)
     if p.name == pkgName then target = p; break end
   end
   if not target then
-    term.print("error: target not found: " .. pkgName)
+    term.print("error: target not found: " .. pkgName, "red")
     return
   end
 
-  term.print("resolving dependencies...")
-  term.print("looking for conflicting packages...")
-  term.print(string.format("\nPackages (1) %s-%s", target.name, target.version))
-  term.print(string.format("\nTotal Download Size:   %.2f KiB", (target.size or 1024) / 1024))
-  term.print(string.format("Total Installed Size:  %.2f KiB\n", (target.size or 1024) / 1024))
-
-  term.write(":: Proceed with installation? [Y/n] ")
+  term.print(string.format("Packages (1) %s-%s", target.name, target.version), "white")
+  term.print(string.format("Total Download Size:   %.2f KiB", (target.size or 1024) / 1024), "dim")
+  term.print(string.format("Install Destination:   %s/%s", INSTALL_DIR, target.name), "dim")
+  term.write(":: Proceed with installation? [Y/n] ", "prompt")
   local ans = readLine()
   if ans ~= "" and ans:lower() ~= "y" then
-    term.print("error: operation aborted by user")
+    term.print("error: operation aborted by user", "red")
     return
   end
 
-  term.print(":: Retrieving packages...")
+  term.print(":: Retrieving packages...", "cyan")
   local fileUrl = REPO_BASE .. "/" .. (target.file or ("bin/" .. target.name))
   local data = fetchUrl(fileUrl)
   if not data or #data == 0 then
-    term.print("error: failed to retrieve " .. fileUrl)
+    term.print("error: failed to retrieve " .. fileUrl, "red")
     return
   end
 
-  local outPath = "/bin/" .. target.name
-  local ok = fs.write(outPath, data)
+  local outPath = INSTALL_DIR .. "/" .. target.name
+  local ok, err = fs.write(outPath, data)
   if not ok then
-    term.print("error: failed to write " .. outPath)
+    term.print("error: failed to write " .. outPath .. " (" .. tostring(err) .. ")", "red")
     return
   end
 
@@ -165,44 +172,51 @@ local function installPkg(pkgName)
   inst[target.name] = target.version
   saveInstalled(inst)
 
-  term.print(string.format("(1/1) installing %-16s [####################] 100%%", target.name))
-  term.print(":: Package installed successfully to " .. outPath)
+  term.print(string.format("(1/1) installing %-16s [####################] 100%%", target.name), "green")
+  term.print(":: Package installed successfully to " .. outPath, "green")
 end
 
 local function removePkg(pkgName)
   local inst = loadInstalled()
   if not inst[pkgName] then
-    term.print("error: target not found: " .. pkgName)
+    term.print("error: target not found: " .. pkgName, "red")
     return
   end
-  term.write(string.format(":: Remove package %s? [Y/n] ", pkgName))
+  term.write(string.format(":: Remove package %s? [Y/n] ", pkgName), "prompt")
   local ans = readLine()
   if ans ~= "" and ans:lower() ~= "y" then return end
 
-  fs.remove("/bin/" .. pkgName)
+  local outPath = INSTALL_DIR .. "/" .. pkgName
+  fs.remove(outPath)
   inst[pkgName] = nil
   saveInstalled(inst)
-  term.print(string.format("(1/1) removing %-18s [####################] 100%%", pkgName))
+  term.print(string.format("(1/1) removing %-18s [####################] 100%%", pkgName), "yellow")
 end
 
 local function listInstalled()
   local inst = loadInstalled()
+  local count = 0
   for n, v in pairs(inst) do
-    term.print(string.format("\27[1m%s\27[0m %s", n, v))
+    term.print(string.format("%-18s %s", n, v), "green")
+    count = count + 1
+  end
+  if count == 0 then
+    term.print("No packages recorded in installed database.", "yellow")
   end
 end
 
 -- CLI Entrypoint
 local args = arg or {}
 if #args == 0 or args[1] == "-h" or args[1] == "--help" then
-  term.print("usage:  pacman <operation> [options] [targets]")
-  term.print("operations:")
-  term.print("  pacman -Sy            synchronize database with GitHub")
-  term.print("  pacman -S <pkg>       install package(s)")
-  term.print("  pacman -R <pkg>       remove package(s)")
-  term.print("  pacman -Ss <query>    search remote package database")
-  term.print("  pacman -Q             list installed packages")
-  term.print("  pacman -Syu           synchronize database and upgrade all")
+  term.print("CardOS Package Manager (pacman v2026.10)", "cyan")
+  term.print("usage:  pacman <operation> [targets]", "white")
+  term.print("operations:", "yellow")
+  term.print("  pacman -Sy            sync package database with GitHub", "text")
+  term.print("  pacman -S <pkg>       install package(s)", "text")
+  term.print("  pacman -R <pkg>       remove package(s)", "text")
+  term.print("  pacman -Ss <query>    search remote package database", "text")
+  term.print("  pacman -Q             list installed packages", "text")
+  term.print("  pacman -Syu           full system upgrade", "text")
   return
 end
 
@@ -211,19 +225,19 @@ if op == "-Sy" then
   syncDb()
 elseif op == "-Syu" then
   if syncDb() then
-    term.print(":: Starting full system upgrade...")
-    term.print(":: All local packages are up to date.")
+    term.print(":: Starting full system upgrade...", "cyan")
+    term.print(":: All local packages are up to date.", "green")
   end
 elseif op == "-Ss" then
   searchDb(args[2] or "")
 elseif op == "-S" then
-  if not args[2] then term.print("error: no targets specified"); return end
+  if not args[2] then term.print("error: no targets specified", "red"); return end
   for i = 2, #args do installPkg(args[i]) end
 elseif op == "-R" then
-  if not args[2] then term.print("error: no targets specified"); return end
+  if not args[2] then term.print("error: no targets specified", "red"); return end
   for i = 2, #args do removePkg(args[i]) end
 elseif op == "-Q" then
   listInstalled()
 else
-  term.print("pacman: unrecognized option '" .. op .. "'")
+  term.print("pacman: unrecognized option '" .. op .. "'", "red")
 end

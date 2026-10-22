@@ -1,61 +1,88 @@
-﻿{
-    "updated_at":  "2026-10-22T22:43:50Z",
-    "version":  1,
-    "packages":  [
-                     {
-                         "version":  "1.0.0",
-                         "name":  "cmatrix",
-                         "file":  "bin/cmatrix",
-                         "description":  "The Matrix digital rain in terminal",
-                         "sha256":  "e49597044373d4b867a4569e1f4c19dd53702a3864edcf061ca42dd508534889",
-                         "type":  "script",
-                         "size":  1557
-                     },
-                     {
-                         "version":  "1.0.0",
-                         "name":  "doom",
-                         "file":  "bin/doom",
-                         "description":  "Classic 3D DOOM engine for Cardputer",
-                         "sha256":  "2b6903610e72c7959dfe2d4a6692a3100321231bbf47f144dce310bff241332e",
-                         "type":  "native",
-                         "size":  1588
-                     },
-                     {
-                         "version":  "1.0.0",
-                         "name":  "fastfetch",
-                         "file":  "bin/fastfetch",
-                         "description":  "System information tool with CardOS logo",
-                         "sha256":  "8cc1665d59d068348ac60d3414044dd4209bb8e7c3403bce4078c1067c4ff75e",
-                         "type":  "script",
-                         "size":  2076
-                     },
-                     {
-                         "version":  "1.0.0",
-                         "name":  "gpsview",
-                         "file":  "bin/gpsview",
-                         "description":  "GPS NMEA live monitor on Grove port (G1/G2)",
-                         "sha256":  "c1152d4bef97034837e663a08b0cfe2dfea1cb6e9ec7711851b102c0f4e04b51",
-                         "type":  "script",
-                         "size":  2540
-                     },
-                     {
-                         "version":  "1.0.0",
-                         "name":  "htop",
-                         "file":  "bin/htop",
-                         "description":  "Interactive process, memory and swap monitor",
-                         "sha256":  "2acadc0e66eec8ab1b34bf3cbf57bb359b71999e24ef699f54aca253f1ed61b6",
-                         "type":  "script",
-                         "size":  3285
-                     },
-                     {
-                         "version":  "1.0.0",
-                         "name":  "wifiscan",
-                         "file":  "bin/wifiscan",
-                         "description":  "Wi-Fi reconnaissance, channel sniffer and probe visualizer",
-                         "sha256":  "a606e78caf03fd940da5960def47de2050d1e87f725709b3eec9c876d3425373",
-                         "type":  "script",
-                         "size":  647
-                     }
-                 ],
-    "repository":  "grisamal/cardos-packages"
+{
+    "repository": "grisamal/cardos-packages",
+    "version": 2,
+    "updated_at": "2026-10-22T17:33:36Z",
+    "packages": [
+        {
+            "name": "cmatrix",
+            "version": "2026.10.1",
+            "description": "Matrix cyberpunk digital green rain in terminal",
+            "sha256": "e49597044373d4b867a4569e1f4c19dd53702a3864edcf061ca42dd508534889",
+            "file": "bin/cmatrix",
+            "type": "script",
+            "size": 1557
+        },
+        {
+            "name": "desktop",
+            "version": "2026.10.1",
+            "description": "CardOS Graphical Desktop Environment (2-row grid, clock, battery HUD)",
+            "sha256": "28602a4e0894970fdf11b5239790a4150a9ee9adf55ed17184154697c58adc95",
+            "file": "bin/desktop",
+            "type": "script",
+            "size": 8002
+        },
+        {
+            "name": "doom",
+            "version": "2026.10.1",
+            "description": "Classic 3D raycasting DOOM shooter for Cardputer",
+            "sha256": "2b6903610e72c7959dfe2d4a6692a3100321231bbf47f144dce310bff241332e",
+            "file": "bin/doom",
+            "type": "script",
+            "size": 1588
+        },
+        {
+            "name": "fastfetch",
+            "version": "2026.10.1",
+            "description": "CardOS / Arch Linux embedded system specs and logo",
+            "sha256": "23d5d1fe6d201c3e4ce669aeba34dd93607ace7e353453bd7d98f46057f302c1",
+            "file": "bin/fastfetch",
+            "type": "script",
+            "size": 2083
+        },
+        {
+            "name": "fileman",
+            "version": "2026.10.1",
+            "description": "Interactive SD card file and directory browser",
+            "sha256": "dbe18020920f39c3d92014903b2f256016c2f1b585a4be0549cc76cc3e18a027",
+            "file": "bin/fileman",
+            "type": "script",
+            "size": 4769
+        },
+        {
+            "name": "gpsview",
+            "version": "2026.10.1",
+            "description": "Grove port NMEA GPS live coordinate monitor (G1/G2)",
+            "sha256": "a53a88424852ae708d560dad95660887e3043207a9928d9c2a4607d59c1b20c2",
+            "file": "bin/gpsview",
+            "type": "script",
+            "size": 2120
+        },
+        {
+            "name": "htop",
+            "version": "2026.10.1",
+            "description": "Interactive CPU, RAM heap, and battery monitor",
+            "sha256": "2acadc0e66eec8ab1b34bf3cbf57bb359b71999e24ef699f54aca253f1ed61b6",
+            "file": "bin/htop",
+            "type": "script",
+            "size": 3285
+        },
+        {
+            "name": "pacman",
+            "version": "2026.10.1",
+            "description": "Arch Linux package manager for CardOS",
+            "sha256": "d5def28f9cd21106240f5cb8161e4484e6401d102cfb5b3de3edc182e115b404",
+            "file": "bin/pacman",
+            "type": "script",
+            "size": 7775
+        },
+        {
+            "name": "wifiscan",
+            "version": "2026.10.1",
+            "description": "Wi-Fi 2.4 GHz channel scanner, RSSI monitor and AP connect tool",
+            "sha256": "b5cc78aabcc8c5714cafb8049272b3b0616369c97b0ee097d1241a75077d6cec",
+            "file": "bin/wifiscan",
+            "type": "script",
+            "size": 3108
+        }
+    ]
 }

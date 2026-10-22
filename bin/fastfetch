@@ -1,16 +1,16 @@
 #!lua
--- fastfetch: a short summary of the device, next to a small Cardputer logo.
+-- fastfetch: CardOS / Arch Linux System Information Tool
 
 local LOGO = {
-  "  .-----------.  ",
-  " | .---------. | ",
-  " | |  >_     | | ",
-  " | |         | | ",
-  " | '---------' | ",
-  " |  [o]     o  | ",
-  "  '-----------'  ",
+  "      /\\       ",
+  "     /  \\      ",
+  "    /\\   \\     ",
+  "   /      \\    ",
+  "  /   ,,   \\   ",
+  " /   |  |  -\\  ",
+  "/_-''    ''-_\\ ",
 }
-local LOGO_WIDTH = 18
+local LOGO_WIDTH = 15
 
 local function uptimeText()
   local s = math.floor(sys.uptime())
@@ -23,7 +23,8 @@ local function bytesText(n)
   return string.format("%d KB", n // 1000)
 end
 
-local user, host = sys.user(), sys.hostname()
+local user = (sys.user and sys.user()) or "user"
+local host = (sys.hostname and sys.hostname()) or "cardos"
 local model, cores, mhz = sys.chip()
 local free, total, psram = sys.heap()
 local pct, mv, charging = sys.battery()
@@ -33,31 +34,32 @@ local packages = fs.list("/usr/local/bin") or {}
 local info = {
   { "", user .. "@" .. host, "white" },
   { "", string.rep("-", #user + #host + 1), "dim" },
-  { "OS", "Cardputer Linux " .. sys.version() },
-  { "Host", sys.board() },
-  { "CPU", string.format("%s, %d cores @ %d MHz", model, cores, mhz) },
+  { "OS", "CardOS 2026.10-arch" },
+  { "Host", "M5Stack Cardputer ADV" },
+  { "Kernel", "CardOS Unix v" .. sys.version() },
   { "Uptime", uptimeText() },
-  { "Memory", string.format("%d KB free of %d KB", free, total)
-      .. (psram > 0 and string.format(" (+ %d KB PSRAM)", psram) or "") },
+  { "CPU", string.format("%s (%d cores @ %dMHz)", model, cores, mhz) },
+  { "Memory", string.format("%d KB / %d KB free", free, total) },
+  { "Storage", sdTotal and (bytesText(sdUsed) .. " / " .. bytesText(sdTotal)) or "MicroSD" },
   { "Battery", string.format("%d%% (%d mV%s)", pct, mv, charging and ", charging" or "") },
-  { "SD card", sdTotal and (bytesText(sdUsed) .. " used of " .. bytesText(sdTotal)) or "not mounted" },
-  { "Network", net.connected() and (net.ssid() .. " (" .. net.ip() .. ")") or "offline" },
-  { "Packages", #packages .. " in /usr/local/bin" },
+  { "Network", net.connected() and (net.ssid() .. " (" .. net.ip() .. ")") or "Disconnected" },
+  { "Packages", #packages .. " (pacman)" },
 }
 
 local rows = math.max(#LOGO, #info)
 for i = 1, rows do
   local logo = LOGO[i] or string.rep(" ", LOGO_WIDTH)
-  term.write(logo .. "  ", "magenta")
+  term.write(logo .. "  ", "cyan")
   local line = info[i]
   if line then
     if line[1] == "" then
       term.print(line[2], line[3])
     else
-      term.write(string.format("%-10s", line[1] .. ":"), "cyan")
+      term.write(string.format("%-9s", line[1] .. ":"), "cyan")
       term.print(line[2], "text")
     end
   else
     term.print("", "text")
   end
 end
+term.flush()

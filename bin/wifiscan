@@ -1,19 +1,113 @@
-﻿#!lua
--- wifiscan: CardOS Wi-Fi recon & monitor tool
-print("CardOS Wi-Fi Reconnaissance v1.0")
-print("Scanning 2.4 GHz channels...")
-if not net or not net.scan then
-  print("Wi-Fi driver initializing...")
+#!lua
+-- wifiscan: CardOS Wi-Fi Reconnaissance & Channel Monitor
+-- Features: Live AP scan, RSSI signal gauge, channel detection, connect prompt
+
+local function rssiBar(rssi)
+  if not rssi then return "[    ]" end
+  if rssi >= -60 then return "[####]"
+  elseif rssi >= -70 then return "[### ]"
+  elseif rssi >= -80 then return "[##  ]"
+  else return "[#   ]" end
 end
-local aps = net.scan()
-if aps and #aps > 0 then
-  print(string.format("%-18s %-4s %-4s %s", "SSID", "CH", "RSSI", "AUTH"))
-  print(string.rep("-", 38))
-  for _, ap in ipairs(aps) do
-    local ssid = ap.ssid or "<hidden>"
-    if #ssid > 18 then ssid = ssid:sub(1, 15) .. "..." end
-    print(string.format("%-18s %-4d %-4d %s", ssid, ap.ch or 0, ap.rssi or 0, ap.auth or "WPA2"))
+
+local function scanAndDraw()
+  term.clear()
+  term.print("CardOS Wi-Fi Reconnaissance v2026.10", "cyan")
+  term.print("Scanning 2.4 GHz channels 1-13...", "yellow")
+  term.flush()
+
+  local aps = net and net.scan and net.scan()
+  term.clear()
+  term.print("CardOS Wi-Fi Reconnaissance (2.4 GHz)", "cyan")
+  term.print(string.rep("-", 40), "dim")
+
+  if not aps or #aps == 0 then
+    term.print("No wireless access points detected.", "yellow")
+    term.print("Press 'r' to rescan, 'q' to exit.", "text")
+    return {}
   end
-else
-  print("No APs found or scan timeout.")
+
+  term.print(string.format(" # %-15s %-3s %-6s %s", "SSID", "CH", "RSSI", "AUTH"), "white")
+  term.print(string.rep("-", 40), "dim")
+
+  local shown = {}
+  local limit = math.min(#aps, 10)
+  for i = 1, limit do
+    local ap = aps[i]
+    table.insert(shown, ap)
+    local s = ap.ssid or "<hidden>"
+    if #s > 15 then s = s:sub(1, 13) .. ".." end
+    local bar = rssiBar(ap.rssi)
+    local auth = ap.auth or "WPA2"
+    if #auth > 5 then auth = auth:sub(1, 5) end
+    local col = (ap.rssi and ap.rssi >= -70) and "green" or "text"
+    term.print(string.format("%d) %-15s %-3d %s %s", i, s, ap.ch or 0, bar, auth), col)
+  end
+
+  term.print(string.rep("-", 40), "dim")
+  term.print("Press [1-9] to connect | [r] Rescan | [q] Exit", "prompt")
+  term.flush()
+  return shown
 end
+
+local function readLine()
+  local str = ""
+  while true do
+    local k = key.poll()
+    if k then
+      if k == "enter" then
+        term.print("", "text")
+        return str
+      elseif k == "backspace" then
+        if #str > 0 then
+          str = str:sub(1, #str - 1)
+          term.write("\b \b", "text")
+        end
+      elseif #k == 1 then
+        str = str .. k
+        term.write(k, "white")
+      end
+    end
+    sys.sleep(10)
+  end
+end
+
+local function connectAp(ap)
+  term.print("")
+  term.print("Connecting to: " .. (ap.ssid or ""), "cyan")
+  term.write("Enter password (empty if open): ", "yellow")
+  local pass = readLine()
+  term.print("Connecting...", "yellow")
+  term.flush()
+  local ok, err = net.connect(ap.ssid, pass, 10)
+  if ok then
+    term.print("[  OK  ] Connected! IP: " .. tostring(net.ip()), "green")
+    if net.save then net.save(ap.ssid, pass) end
+  else
+    term.print("[FAILED] Connection error: " .. tostring(err), "red")
+  end
+  term.print("Press Enter to continue...", "prompt")
+  readLine()
+end
+
+-- Main loop
+local shown = scanAndDraw()
+while true do
+  local k = key.poll()
+  if k then
+    if k == "q" or k == "ctrl-q" or k == "esc" then
+      break
+    elseif k == "r" then
+      shown = scanAndDraw()
+    else
+      local num = tonumber(k)
+      if num and num >= 1 and num <= #shown then
+        connectAp(shown[num])
+        shown = scanAndDraw()
+      end
+    end
+  end
+  sys.sleep(30)
+end
+
+term.clear()

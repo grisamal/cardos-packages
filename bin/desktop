@@ -1,0 +1,240 @@
+#!lua
+-- CardOS Graphical Desktop Environment
+-- Designed specifically for M5Stack Cardputer ADV (ST7789 240x135)
+
+local apps = {
+  -- Row 0
+  { id = "term",      row = 0, col = 0, badge = ">_",  name = "Term",     title = "Arch Shell",          desc = "Exit to command line shell" },
+  { id = "wifiscan",  row = 0, col = 1, badge = "WF",  name = "WiFi",     title = "WiFi Recon",          desc = "2.4GHz channel scan & monitor" },
+  { id = "doom",      row = 0, col = 2, badge = "DM",  name = "DOOM",     title = "DOOM 3D",             desc = "Classic 3D raycasting shooter" },
+  { id = "snake",     row = 0, col = 3, badge = "SN",  name = "Snake",    title = "Retro Snake",         desc = "Classic arcade snake game" },
+  { id = "gpsview",   row = 0, col = 4, badge = "GP",  name = "GPS",      title = "GPS Monitor",         desc = "Grove port NMEA coordinates HUD" },
+  { id = "htop",      row = 0, col = 5, badge = "HT",  name = "Htop",     title = "System Monitor",      desc = "CPU, RAM heap & battery gauge" },
+  { id = "afplay",    row = 0, col = 6, badge = "MU",  name = "Music",    title = "Audio Player",        desc = "I2S WAV/PCM sound player" },
+  { id = "pacman",    row = 0, col = 7, badge = "PM",  name = "Pacman",   title = "Package Manager",     desc = "Install apps from GitHub repo" },
+
+  -- Row 1
+  { id = "fileman",   row = 1, col = 0, badge = "FL",  name = "Files",    title = "File Manager",        desc = "Browse SD card files & folders" },
+  { id = "config",    row = 1, col = 1, badge = "CF",  name = "Config",   title = "CardOS Setup",        desc = "Reconfigure user, tz, & WiFi" },
+  { id = "tetris",    row = 1, col = 2, badge = "TT",  name = "Tetris",   title = "Tetris Blocks",       desc = "Classic falling block puzzle" },
+  { id = "sokoban",   row = 1, col = 3, badge = "SK",  name = "Sokoban",  title = "Sokoban Puzzle",      desc = "Crate pushing logic game" },
+  { id = "cmatrix",   row = 1, col = 4, badge = "MX",  name = "Matrix",   title = "Matrix Rain",         desc = "Digital cyberpunk console rain" },
+  { id = "fastfetch", row = 1, col = 5, badge = "FF",  name = "Fetch",    title = "CardOS Fastfetch",    desc = "Arch Linux hardware specs" },
+  { id = "weather",   row = 1, col = 6, badge = "WT",  name = "Weather",  title = "Weather Forecast",    desc = "Live meteorological forecast" },
+  { id = "reboot",    row = 1, col = 7, badge = "RB",  name = "Reboot",   title = "System Restart",      desc = "Reboot Cardputer hardware" },
+}
+
+local COL_COUNT = 8
+local TILE_W = 52
+local TILE_H = 40
+local TILE_GAP = 8
+local STEP_X = TILE_W + TILE_GAP -- 60px
+
+local cur_row = 0
+local cur_col = 0
+
+local function getSelectedApp()
+  for _, a in ipairs(apps) do
+    if a.row == cur_row and a.col == cur_col then return a end
+  end
+  return apps[1]
+end
+
+local function drawTopBar()
+  -- Bar background
+  gfx.fill(0, 0, 240, 15, 0x181e28)
+  gfx.hline(0, 240, 15, 0x2d3748)
+
+  -- Logo
+  gfx.text(4, 3, "CardOS", 0x00d2ff)
+  gfx.text(46, 3, "2026", 0x718096)
+
+  -- Time
+  local t = sys.time()
+  if not t or t == "" then
+    local s = math.floor(sys.uptime())
+    t = string.format("%02d:%02d:%02d", (s // 3600) % 24, (s // 60) % 60, s % 60)
+  end
+  gfx.text(100, 3, t, 0xffffff)
+
+  -- WiFi status
+  local wf_color = 0x718096
+  local wf_txt = "[--]"
+  if net and net.connected and net.connected() then
+    wf_color = 0x2ecc71
+    wf_txt = "[WF]"
+  end
+  gfx.text(168, 3, wf_txt, wf_color)
+
+  -- Battery
+  local pct = 100
+  if sys.battery then pct = sys.battery() or 100 end
+  local b_col = 0x2ecc71
+  if pct <= 20 then b_col = 0xe74c3c
+  elseif pct <= 50 then b_col = 0xf39c12 end
+  gfx.text(202, 3, string.format("%3d%%", pct), b_col)
+end
+
+local function drawDesktop()
+  gfx.clear(0x0f141c)
+  drawTopBar()
+
+  -- Calculate horizontal scroll offset
+  local target_scroll = (cur_col * STEP_X) - 90
+  local max_scroll = (COL_COUNT * STEP_X) - 232
+  if target_scroll < 0 then target_scroll = 0 end
+  if target_scroll > max_scroll then target_scroll = max_scroll end
+
+  -- Draw app tiles
+  for _, a in ipairs(apps) do
+    local tx = (a.col * STEP_X) + 8 - target_scroll
+    local ty = (a.row == 0) and 20 or 66
+
+    if tx + TILE_W >= 0 and tx <= 240 then
+      local is_sel = (a.row == cur_row and a.col == cur_col)
+      if is_sel then
+        -- Selected card with glowing border
+        gfx.fill(tx, ty, TILE_W, TILE_H, 0x1f344d)
+        gfx.rect(tx, ty, TILE_W, TILE_H, 0x00d2ff)
+        gfx.rect(tx + 1, ty + 1, TILE_W - 2, TILE_H - 2, 0x38bdf8)
+        -- Badge
+        gfx.text(tx + 18, ty + 6, a.badge, 0x00f0ff)
+        -- Name
+        gfx.text(tx + 6, ty + 24, string.format("%-6s", a.name), 0xffffff)
+      else
+        -- Normal card
+        gfx.fill(tx, ty, TILE_W, TILE_H, 0x181e28)
+        gfx.rect(tx, ty, TILE_W, TILE_H, 0x283344)
+        -- Badge
+        gfx.text(tx + 18, ty + 6, a.badge, 0x94a3b8)
+        -- Name
+        gfx.text(tx + 6, ty + 24, string.format("%-6s", a.name), 0xcbd5e1)
+      end
+    end
+  end
+
+  -- Bottom Info Bar
+  gfx.fill(0, 114, 240, 21, 0x131720)
+  gfx.hline(0, 240, 114, 0x2d3748)
+
+  local sel = getSelectedApp()
+  -- Line 1: Title & Description
+  local line1 = string.format("%s: %s", sel.title, sel.desc)
+  if #line1 > 38 then line1 = line1:sub(1, 36) .. ".." end
+  gfx.text(4, 116, line1, 0xffffff)
+
+  -- Line 2: Navigation hints
+  gfx.text(4, 126, "WASD:Nav  Enter:Open  Q:Shell", 0xf59e0b)
+
+  gfx.flush()
+end
+
+local function executeApp(app)
+  if app.id == "term" then
+    return false -- exit desktop to shell
+  elseif app.id == "reboot" then
+    gfx.clear(0x000000)
+    gfx.text(70, 60, "Rebooting Cardputer...", 0xffffff)
+    gfx.flush()
+    sys.sleep(1000)
+    sys.reboot()
+    return false
+  end
+
+  -- Close graphics to give display back to app
+  gfx.close()
+
+  if app.id == "config" then
+    local code = fs.read("/sys/archinstall.lua")
+    if code then
+      code = code:gsub("^#![^\n]*\n", "")
+      local fn = load(code)
+      if fn then fn() end
+    end
+  elseif app.id == "weather" then
+    local code = fs.read("/usr/local/bin/weatherForecast")
+    if code then
+      code = code:gsub("^#![^\n]*\n", "")
+      local fn = load(code)
+      if fn then fn() end
+    end
+  else
+    local path = "/usr/local/bin/" .. app.id
+    if fs.exists(path) then
+      local code = fs.read(path)
+      if code then
+        code = code:gsub("^#![^\n]*\n", "")
+        local fn, err = load(code)
+        if fn then
+          local ok, rerr = pcall(fn)
+          if not ok then
+            term.print("Runtime error: " .. tostring(rerr), "red")
+            sys.sleep(2000)
+          end
+        else
+          term.print("Load error: " .. tostring(err), "red")
+          sys.sleep(2000)
+        end
+      end
+    else
+      term.print("App not found: " .. path, "red")
+      term.print("Install with: pacman -S " .. app.id, "yellow")
+      sys.sleep(2000)
+    end
+  end
+
+  -- Reopen graphics when returning
+  local nw, nh = gfx.open()
+  if not nw then return false end
+  return true
+end
+
+-- Main Desktop Loop
+local w, h = gfx.open()
+if not w then
+  term.print("Desktop error: could not open gfx canvas", "red")
+  return
+end
+
+drawDesktop()
+
+local running = true
+while running do
+  local k = key.poll()
+  local redraw = false
+
+  if k then
+    if k == "right" or k == "d" or k == "," then
+      cur_col = (cur_col + 1) % COL_COUNT
+      redraw = true
+    elseif k == "left" or k == "a" or k == "/" then
+      cur_col = (cur_col - 1 + COL_COUNT) % COL_COUNT
+      redraw = true
+    elseif k == "down" or k == "s" or k == "." then
+      cur_row = 1
+      redraw = true
+    elseif k == "up" or k == "w" or k == ";" then
+      cur_row = 0
+      redraw = true
+    elseif k == "enter" or k == " " then
+      local sel = getSelectedApp()
+      if not executeApp(sel) then
+        running = false
+        break
+      end
+      redraw = true
+    elseif k == "q" or k == "ctrl-q" or k == "esc" then
+      running = false
+      break
+    end
+  end
+
+  if redraw then
+    drawDesktop()
+  else
+    sys.sleep(30)
+  end
+end
+
+gfx.close()
+term.clear()
