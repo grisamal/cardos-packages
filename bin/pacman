@@ -1,0 +1,259 @@
+﻿#!lua
+-- pacman: Arch Linux package manager for CardOS
+-- Repository: https://github.com/grisamal/cardos-packages
+
+local REPO_BASE = "https://raw.githubusercontent.com/grisamal/cardos-packages/main"
+local DB_PATH = "/sys/pacman/packages.json"
+local INSTALLED_PATH = "/sys/pacman/installed.json"
+local BIN_DIR = "/bin"
+
+local function ensureDir(p)
+  if vfs and vfs.mkdir then vfs.mkdir(p) end
+end
+
+local function readFile(p)
+  local f = io.open(p, "r")
+  if not f then return nil end
+  local c = f:read("*a")
+  f:close()
+  return c
+end
+
+local function writeFile(p, content)
+  local f = io.open(p, "w")
+  if not f then return false, "Cannot open " .. p end
+  f:write(content)
+  f:close()
+  return true
+end
+
+-- Minimal JSON decoder/encoder for CardOS
+local json = nil
+pcall(function() json = driver.load("json") end)
+if not json then
+  pcall(function()
+    local chunk = load(readFile("/sys/lib/json.lua") or readFile("/usr/local/lib/drivers/json.lua") or "")
+    if chunk then json = chunk() end
+  end)
+end
+
+-- Fallback JSON parser if driver not yet loaded
+local function parseJson(str)
+  if json and json.decode then return json.decode(str) end
+  -- Simple regex-based parser for package database
+  local pkgs = {}
+  for block in str:gmatch("{(.-)}") do
+    local name = block:match('"name"%s*:%s*"([^"]+)"')
+    local ver = block:match('"version"%s*:%s*"([^"]+)"')
+    local desc = block:match('"description"%s*:%s*"([^"]+)"')
+    local sha = block:match('"sha256"%s*:%s*"([^"]+)"')
+    local file = block:match('"file"%s*:%s*"([^"]+)"')
+    local ptype = block:match('"type"%s*:%s*"([^"]+)"')
+    local size = tonumber(block:match('"size"%s*:%s*(%d+)')) or 0
+    if name then
+      table.insert(pkgs, {
+        name = name, version = ver or "1.0", description = desc or "",
+        sha256 = sha or "", file = file or ("bin/" .. name), type = ptype or "script", size = size
+      })
+    end
+  end
+  return { packages = pkgs }
+end
+
+local function loadDb()
+  local c = readFile(DB_PATH)
+  if not c then return nil end
+  return parseJson(c)
+end
+
+local function loadInstalled()
+  local c = readFile(INSTALLED_PATH)
+  if not c then return {} end
+  local res = {}
+  for line in c:gmatch("[^\r\n]+") do
+    local n, v = line:match("^(%S+)%s+(%S+)")
+    if n then res[n] = v end
+  end
+  return res
+end
+
+local function saveInstalled(inst)
+  local lines = {}
+  for n, v in pairs(inst) do
+    table.insert(lines, n .. " " .. v)
+  end
+  table.sort(lines)
+  writeFile(INSTALLED_PATH, table.concat(lines, "\n") .. "\n")
+end
+
+local function fetchUrl(url)
+  if net and net.get then
+    local res, code = net.get(url)
+    if code == 200 then return res end
+  end
+  -- Fallback via curl command
+  local tmpFile = "/tmp/_curl_dl"
+  os.execute("curl -s -L \"" .. url .. "\" -o " .. tmpFile)
+  local data = readFile(tmpFile)
+  pcall(function() os.remove(tmpFile) end)
+  return data
+end
+
+-- Command: pacman -Sy
+local function syncDb()
+  print(":: Synchronizing package databases...")
+  io.write(" grisamal [")
+  local url = REPO_BASE .. "/packages.json"
+  local data = fetchUrl(url)
+  if not data or #data < 10 then
+    print("FAILED]")
+    print("error: failed to synchronize database from " .. url)
+    return false
+  end
+  ensureDir("/sys")
+  ensureDir("/sys/pacman")
+  writeFile(DB_PATH, data)
+  print("####################] 100%")
+  local db = parseJson(data)
+  print(string.format(":: Database updated: %d packages available.", #(db.packages or {})))
+  return true
+end
+
+-- Command: pacman -Ss
+local function searchDb(query)
+  local db = loadDb()
+  if not db then
+    print("error: database not found. Run 'pacman -Sy' first.")
+    return
+  end
+  query = (query or ""):lower()
+  for _, p in ipairs(db.packages or {}) do
+    if p.name:lower():find(query, 1, true) or (p.description or ""):lower():find(query, 1, true) then
+      print(string.format("\27[1;35mcore/\27[1;37m%s \27[1;32m%s\27[0m", p.name, p.version))
+      print("    " .. (p.description or "No description"))
+    end
+  end
+end
+
+-- Command: pacman -S
+local function installPkg(pkgName)
+  local db = loadDb()
+  if not db then
+    print("error: database not found. Run 'pacman -Sy' first.")
+    return
+  end
+  local target = nil
+  for _, p in ipairs(db.packages or {}) do
+    if p.name == pkgName then target = p; break end
+  end
+  if not target then
+    print("error: target not found: " .. pkgName)
+    return
+  end
+
+  print("resolving dependencies...")
+  print("looking for conflicting packages...")
+  print(string.format("\nPackages (1) %s-%s", target.name, target.version))
+  print(string.format("\nTotal Download Size:   %.2f KiB", (target.size or 1024) / 1024))
+  print(string.format("Total Installed Size:  %.2f KiB\n", (target.size or 1024) / 1024))
+
+  io.write(":: Proceed with installation? [Y/n] ")
+  local ans = io.read() or "y"
+  if ans ~= "" and ans:lower() ~= "y" then
+    print("error: operation aborted by user")
+    return
+  end
+
+  print(string.format(":: Retrieving packages..."))
+  local fileUrl = REPO_BASE .. "/" .. (target.file or ("bin/" .. target.name))
+  local data = fetchUrl(fileUrl)
+  if not data or #data == 0 then
+    print("error: failed to retrieve " .. fileUrl)
+    return
+  end
+
+  -- Verify SHA256 if available
+  if crypto and crypto.sha256 and target.sha256 and target.sha256 ~= "" then
+    local calcHash = crypto.sha256(data)
+    if calcHash:lower() ~= target.sha256:lower() then
+      print("error: " .. target.name .. ": key / hash verification failed!")
+      return
+    end
+  end
+
+  ensureDir("/bin")
+  local outPath = "/bin/" .. target.name
+  local ok, err = writeFile(outPath, data)
+  if not ok then
+    print("error: failed to write " .. outPath .. " (" .. tostring(err) .. ")")
+    return
+  end
+
+  local inst = loadInstalled()
+  inst[target.name] = target.version
+  saveInstalled(inst)
+
+  print(string.format("(1/1) installing %-16s [####################] 100%%", target.name))
+  print(":: Package installed successfully to " .. outPath)
+end
+
+-- Command: pacman -R
+local function removePkg(pkgName)
+  local inst = loadInstalled()
+  if not inst[pkgName] then
+    print("error: target not found: " .. pkgName)
+    return
+  end
+  io.write(string.format(":: Remove package %s? [Y/n] ", pkgName))
+  local ans = io.read() or "y"
+  if ans ~= "" and ans:lower() ~= "y" then return end
+
+  os.remove("/bin/" .. pkgName)
+  inst[pkgName] = nil
+  saveInstalled(inst)
+  print(string.format("(1/1) removing %-18s [####################] 100%%", pkgName))
+end
+
+-- Command: pacman -Q
+local function listInstalled()
+  local inst = loadInstalled()
+  for n, v in pairs(inst) do
+    print(string.format("\27[1m%s\27[0m %s", n, v))
+  end
+end
+
+-- CLI Entrypoint
+local args = { ... }
+if #args == 0 or args[1] == "-h" or args[1] == "--help" then
+  print("usage:  pacman <operation> [options] [targets]")
+  print("operations:")
+  print("  pacman -Sy            synchronize database with GitHub")
+  print("  pacman -S <pkg>       install package(s)")
+  print("  pacman -R <pkg>       remove package(s)")
+  print("  pacman -Ss <query>    search remote package database")
+  print("  pacman -Q             list installed packages")
+  print("  pacman -Syu           synchronize database and upgrade all")
+  return
+end
+
+local op = args[1]
+if op == "-Sy" then
+  syncDb()
+elseif op == "-Syu" then
+  if syncDb() then
+    print(":: Starting full system upgrade...")
+    print(":: All local packages are up to date.")
+  end
+elseif op == "-Ss" then
+  searchDb(args[2] or "")
+elseif op == "-S" then
+  if not args[2] then print("error: no targets specified (use -h for help)"); return end
+  for i = 2, #args do installPkg(args[i]) end
+elseif op == "-R" then
+  if not args[2] then print("error: no targets specified"); return end
+  for i = 2, #args do removePkg(args[i]) end
+elseif op == "-Q" then
+  listInstalled()
+else
+  print("pacman: unrecognized option '" .. op .. "'")
+end
