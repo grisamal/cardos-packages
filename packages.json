@@ -1,0 +1,61 @@
+﻿{
+    "updated_at":  "2026-10-22T22:43:50Z",
+    "version":  1,
+    "packages":  [
+                     {
+                         "version":  "1.0.0",
+                         "name":  "cmatrix",
+                         "file":  "bin/cmatrix",
+                         "description":  "The Matrix digital rain in terminal",
+                         "sha256":  "e49597044373d4b867a4569e1f4c19dd53702a3864edcf061ca42dd508534889",
+                         "type":  "script",
+                         "size":  1557
+                     },
+                     {
+                         "version":  "1.0.0",
+                         "name":  "doom",
+                         "file":  "bin/doom",
+                         "description":  "Classic 3D DOOM engine for Cardputer",
+                         "sha256":  "2b6903610e72c7959dfe2d4a6692a3100321231bbf47f144dce310bff241332e",
+                         "type":  "native",
+                         "size":  1588
+                     },
+                     {
+                         "version":  "1.0.0",
+                         "name":  "fastfetch",
+                         "file":  "bin/fastfetch",
+                         "description":  "System information tool with CardOS logo",
+                         "sha256":  "8cc1665d59d068348ac60d3414044dd4209bb8e7c3403bce4078c1067c4ff75e",
+                         "type":  "script",
+                         "size":  2076
+                     },
+                     {
+                         "version":  "1.0.0",
+                         "name":  "gpsview",
+                         "file":  "bin/gpsview",
+                         "description":  "GPS NMEA live monitor on Grove port (G1/G2)",
+                         "sha256":  "c1152d4bef97034837e663a08b0cfe2dfea1cb6e9ec7711851b102c0f4e04b51",
+                         "type":  "script",
+                         "size":  2540
+                     },
+                     {
+                         "version":  "1.0.0",
+                         "name":  "htop",
+                         "file":  "bin/htop",
+                         "description":  "Interactive process, memory and swap monitor",
+                         "sha256":  "2acadc0e66eec8ab1b34bf3cbf57bb359b71999e24ef699f54aca253f1ed61b6",
+                         "type":  "script",
+                         "size":  3285
+                     },
+                     {
+                         "version":  "1.0.0",
+                         "name":  "wifiscan",
+                         "file":  "bin/wifiscan",
+                         "description":  "Wi-Fi reconnaissance, channel sniffer and probe visualizer",
+                         "sha256":  "a606e78caf03fd940da5960def47de2050d1e87f725709b3eec9c876d3425373",
+                         "type":  "script",
+                         "size":  647
+                     }
+                 ],
+    "repository":  "grisamal/cardos-packages"
+}

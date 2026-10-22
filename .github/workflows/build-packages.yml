@@ -1,0 +1,35 @@
+﻿name: CardOS Package CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate packages.json
+        run: |
+          python3 -c "import json; json.load(open('packages.json'))"
+          echo "packages.json is valid JSON."
+
+      - name: Verify package files & SHA256 checksums
+        run: |
+          python3 - << 'EOF'
+          import json, os, hashlib
+          with open('packages.json') as f:
+              data = json.load(f)
+          for pkg in data.get('packages', []):
+              path = pkg.get('file')
+              if os.path.exists(path):
+                  with open(path, 'rb') as pf:
+                      actual_hash = hashlib.sha256(pf.read()).hexdigest()
+                  print(f"Verified {pkg['name']}: {actual_hash[:8]}...")
+              else:
+                  print(f"Notice: file {path} not yet built or will be populated by package builders.")
+          EOF

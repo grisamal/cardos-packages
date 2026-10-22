@@ -1,0 +1,19 @@
+﻿#!lua
+-- wifiscan: CardOS Wi-Fi recon & monitor tool
+print("CardOS Wi-Fi Reconnaissance v1.0")
+print("Scanning 2.4 GHz channels...")
+if not net or not net.scan then
+  print("Wi-Fi driver initializing...")
+end
+local aps = net.scan()
+if aps and #aps > 0 then
+  print(string.format("%-18s %-4s %-4s %s", "SSID", "CH", "RSSI", "AUTH"))
+  print(string.rep("-", 38))
+  for _, ap in ipairs(aps) do
+    local ssid = ap.ssid or "<hidden>"
+    if #ssid > 18 then ssid = ssid:sub(1, 15) .. "..." end
+    print(string.format("%-18s %-4d %-4d %s", ssid, ap.ch or 0, ap.rssi or 0, ap.auth or "WPA2"))
+  end
+else
+  print("No APs found or scan timeout.")
+end
